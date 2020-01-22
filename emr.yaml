@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: m5.xlarge
+  ReleaseLabel:
+    Type: String
+    Default: emr-5.28.1
+  KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: KeyPair to assign to EMR instances
+  publicSubnetA:
+    Type: AWS::EC2::Subnet::Id
+    Description: EMR subnet Id
+  vpc:
+    Type: AWS::EC2::VPC::Id
+    Description: EMR VPC Id
+
+Resources:
+  cluster:
+    Type: 'AWS::EMR::Cluster'
+    Properties:
+      Applications:
+        - Name: Presto
+        - Name: Hive
+        - Name: Hadoop
+        - Name: Hue
+      Configurations:
+      - Classification: hive-site
+        ConfigurationProperties:
+          hive.metastore.client.factory.class: com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory
+      - Classification: presto-connector-hive
+        ConfigurationProperties:
+          hive.metastore.glue.datacatalog.enabled: 'true'
+      - Classification: spark-hive-site
+        ConfigurationProperties:
+          hive.metastore.client.factory.class: com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory
+      Instances:
+        MasterInstanceGroup:
+          InstanceCount: 1
+          InstanceType: !Ref InstanceType
+          Market: ON_DEMAND
+          Name: cfnMaster
+        CoreInstanceGroup:
+          InstanceCount: 1
+          InstanceType: !Ref InstanceType
+          Market: ON_DEMAND
+          Name: cfnCore
+        Ec2KeyName: !Ref KeyPair
+        Ec2SubnetId: !Ref publicSubnetA
+        AdditionalSlaveSecurityGroups:
+          - !Ref emrSecurityGroup
+        AdditionalMasterSecurityGroups:
+          - !Ref emrSecurityGroup
+      Name: CFNtest
+      JobFlowRole: !Ref emrEc2InstanceProfile
+      ServiceRole: !Ref emrRole
+      ReleaseLabel: !Ref ReleaseLabel
+      VisibleToAllUsers: true
+
+  emrRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: elasticmapreduce.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole'
+
+  emrEc2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role'
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+
+  emrEc2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref emrEc2Role
+
+  emrSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Appserver Instances
+      VpcId: !Ref vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
