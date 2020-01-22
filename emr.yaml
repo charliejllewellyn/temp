@@ -26,6 +26,7 @@ Resources:
         - Name: Hive
         - Name: Hadoop
         - Name: Hue
+        - Name: Spark
       Configurations:
       - Classification: hive-site
         ConfigurationProperties:
